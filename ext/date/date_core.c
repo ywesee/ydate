@@ -7200,13 +7200,17 @@ d_lite_marshal_load(VALUE self, VALUE a)
 	break;
     }
 
+    if (simple_dat_p(dat) && (df || !f_zero_p(sf) || of)) {
+	rb_warn("loading complex date into simple date; promote to complex");
+	dat = ruby_xrealloc(dat, sizeof(struct ComplexDateData));
+	RTYPEDDATA(self)->data = dat;
+	goto complex_data;
+    }
+
     if (simple_dat_p(dat)) {
-	if (df || !f_zero_p(sf) || of) {
-	    rb_raise(rb_eArgError,
-		     "cannot load complex into simple");
-	}
 	set_to_simple(self, &dat->s, nth, jd, sg, 0, 0, 0, HAVE_JD);
     } else {
+      complex_data:
 	set_to_complex(self, &dat->c, nth, jd, df, sf, of, sg,
 		       0, 0, 0, 0, 0, 0,
 		       HAVE_JD | HAVE_DF);
