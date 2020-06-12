@@ -173,7 +173,7 @@ f_negative_p(VALUE x)
 #define have_df_p(x) ((x)->flags & HAVE_DF)
 #define have_civil_p(x) ((x)->flags & HAVE_CIVIL)
 #define have_time_p(x) ((x)->flags & HAVE_TIME)
-#define complex_dat_p(x) ((x)->flags & COMPLEX_DAT)
+#define complex_dat_p(x) 1 /* ((x)->flags & COMPLEX_DAT) */
 #define simple_dat_p(x) (!complex_dat_p(x))
 
 #define ITALY 2299161 /* 1582-10-15 */
@@ -2967,8 +2967,7 @@ d_lite_gc_mark(void *ptr)
 static size_t
 d_lite_memsize(const void *ptr)
 {
-    const union DateData *dat = ptr;
-    return complex_dat_p(dat) ? sizeof(struct ComplexDateData) : sizeof(struct SimpleDateData);
+    return sizeof(struct ComplexDateData);
 }
 
 static const rb_data_type_t d_lite_type = {
@@ -2978,24 +2977,9 @@ static const rb_data_type_t d_lite_type = {
     RUBY_TYPED_FREE_IMMEDIATELY|RUBY_TYPED_WB_PROTECTED,
 };
 
-inline static VALUE
-d_simple_new_internal(VALUE klass,
-		      VALUE nth, int jd,
-		      double sg,
-		      int y, int m, int d,
-		      unsigned flags)
-{
-    struct SimpleDateData *dat;
-    VALUE obj;
+#define d_simple_new_internal(klass, nth, jd, sg, y, m, d, flags) \
+    d_complex_new_internal(klass, nth, jd, 0, INT2FIX(0), 0, sg, y, m, d, 0, 0, 0, flags)
 
-    obj = TypedData_Make_Struct(klass, struct SimpleDateData,
-				&d_lite_type, dat);
-    set_to_simple(obj, dat, nth, jd, sg, y, m, d, flags);
-
-    assert(have_jd_p(dat) || have_civil_p(dat));
-
-    return obj;
-}
 
 inline static VALUE
 d_complex_new_internal(VALUE klass,
@@ -3020,6 +3004,7 @@ d_complex_new_internal(VALUE klass,
     return obj;
 }
 
+#if 0
 static VALUE
 d_lite_s_alloc_simple(VALUE klass)
 {
@@ -3029,6 +3014,9 @@ d_lite_s_alloc_simple(VALUE klass)
 				 0, 0, 0,
 				 HAVE_JD);
 }
+#else
+#define d_lite_s_alloc_simple d_lite_s_alloc_complex
+#endif
 
 static VALUE
 d_lite_s_alloc_complex(VALUE klass)
@@ -3419,11 +3407,7 @@ date_initialize(int argc, VALUE *argv, VALUE self)
     VALUE vy, vm, vd, vsg, y, fr, fr2, ret;
     int m, d;
     double sg;
-    struct SimpleDateData *dat = rb_check_typeddata(self, &d_lite_type);
-
-    if (!simple_dat_p(dat)) {
-	rb_raise(rb_eTypeError, "Date expected");
-    }
+    struct ComplexDateData *dat = rb_check_typeddata(self, &d_lite_type);
 
     rb_scan_args(argc, argv, "04", &vy, &vm, &vd, &vsg);
 
@@ -7412,10 +7396,6 @@ datetime_initialize(int argc, VALUE *argv, VALUE self)
     double sg;
     struct ComplexDateData *dat = rb_check_typeddata(self, &d_lite_type);
 
-    if (!complex_dat_p(dat)) {
-	rb_raise(rb_eTypeError, "DateTime expected");
-    }
-
     rb_scan_args(argc, argv, "08", &vy, &vm, &vd, &vh, &vmin, &vs, &vof, &vsg);
 
     y = INT2FIX(-4712);
@@ -9368,7 +9348,6 @@ Init_date_core(void)
     rb_define_singleton_method(cDate, "jd", date_s_jd, -1);
     rb_define_singleton_method(cDate, "ordinal", date_s_ordinal, -1);
     rb_define_singleton_method(cDate, "civil", date_s_civil, -1);
-    rb_define_singleton_method(cDate, "new", date_s_civil, -1);
     rb_define_singleton_method(cDate, "commercial", date_s_commercial, -1);
 
 #ifndef NDEBUG
@@ -9396,6 +9375,7 @@ Init_date_core(void)
     rb_define_singleton_method(cDate, "_jisx0301", date_s__jisx0301, 1);
     rb_define_singleton_method(cDate, "jisx0301", date_s_jisx0301, -1);
 
+    rb_define_method(cDate, "initialize", date_initialize, -1);
     rb_define_method(cDate, "initialize_copy", d_lite_initialize_copy, 1);
 
 #ifndef NDEBUG
